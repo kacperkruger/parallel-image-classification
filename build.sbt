@@ -14,8 +14,13 @@ scalacOptions ++= Seq(
 )
 
 val circeVersion = "0.14.1"
+val akkaVersion = "2.6.14"
 
 libraryDependencies ++= Seq(
   "io.circe" %% "circe-generic",
   "io.circe" %% "circe-parser"
 ).map(_ % circeVersion)
+
+libraryDependencies ++= Seq(
+  "com.typesafe.akka" %% "akka-actor"
+).map(_ % akkaVersion)
