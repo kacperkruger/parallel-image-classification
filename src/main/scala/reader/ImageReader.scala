@@ -1,20 +1,12 @@
 package reader
 
+import java.awt.image.BufferedImage
 import java.io.File
+import javax.imageio.ImageIO
 
 object ImageReader {
-  def getListOfFiles(directoryPath: String): Option[List[File]] = {
-    val dir = new File(directoryPath)
-    if (dir.exists && dir.isDirectory)
-      Some(
-        dir.listFiles
-          .filter(file =>
-            file.isFile && (file.toString.contains(".jpg") || file.toString
-              .contains(".png"))
-          )
-          .toList
-      )
-    else None
+  def getListOfFiles(dir: File): List[BufferedImage] = {
+    dir.listFiles.filter(_.isFile).toList.map(ImageIO.read)
   }
 
 }
