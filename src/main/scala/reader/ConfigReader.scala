@@ -4,7 +4,11 @@ import io.circe.generic.JsonCodec
 import io.circe.parser.parse
 
 object ConfigReader {
-  @JsonCodec case class Config(inputDirectory: String, outputDirectory: String)
+  @JsonCodec case class Config(
+      inputDirectory: String,
+      outputDirectory: String,
+      cutOff: Int
+  )
 
   def readConfig: Option[Config] = {
     val configString = scala.io.Source.fromResource("config.json").mkString
