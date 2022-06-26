@@ -1,57 +1,79 @@
 package actors
 
-import actors.Master.{Aggregate, Initialize}
-import actors.Worker.{Execute, Luminance, Result}
+import actors.Ingestion.Image
+import actors.Master.Aggregate
+import actors.ParentMaster.{Dark, Data, Light}
+import actors.Worker.Luminance
 import akka.actor.{Actor, ActorRef, Props}
 
 object Master {
-  case object Initialize
+  case object InitializeMaster
   case object WorkerInitialized
-  case class Aggregate(sumOfLuminance: Luminance)
+  case class FinalResult(luminance: Luminance)
+  case class Data(sumOfColor: Int)
 
-  def props(amountOfWorker: Int): Props = Props(new Master(amountOfWorker))
+  trait LuminanceLabel
+  case object Dark extends LuminanceLabel
+  case object Light extends LuminanceLabel
+
+  def props(amountOfWorkers: Int, cutOff: Int): Props = Props(
+    new Master(amountOfWorkers, cutOff)
+  )
 }
 
-class Master(amountOfWorkers: Int) extends Actor {
-  override def receive: Receive = waitingForInitialization
+class Master(amountOfMasters: Int, cutOff: Int) extends Actor {
+  val masters: Vector[ActorRef] =
+    (0 until amountOfMasters).toVector.map(id =>
+      context.actorOf(Props[Master], s"$id-master")
+    )
 
-  def waitingForInitialization: Receive = { case Initialize =>
-    val workers =
-      (0 until amountOfWorkers).toVector.map(id =>
-        context.actorOf(Props[Worker], s"$id-worker")
-      )
-    context.become(waitingForData(0, 0, workers, Set.empty[Int], Luminance(0)))
-  }
+  override def receive: Receive =
+    waitingForImage(
+      0,
+      0,
+      masters,
+      Set.empty[Int],
+      Map.empty[String, Luminance]
+    )
 
-  def waitingForData(
-      currentWorkerId: Int,
+  def waitingForImage(
+      currentMasterId: Int,
       currentTaskId: Int,
-      workers: Vector[ActorRef],
+      masters: Vector[ActorRef],
       taskIdSet: Set[Int],
-      result: Luminance
+      result: Map[String, Luminance]
   ): Receive = {
-    case Data(arr) =>
-      val currentWorker = workers(currentWorkerId)
-      currentWorker ! Execute(currentTaskId, arr)
+    case Image(name, img) =>
+      val currentMaster = masters(currentMasterId)
+      val w = img.getWidth()
+      val h = img.getHeight()
+      val imgRGB = img.getRGB(0, 0, w, h, null, 0, w)
+      currentMaster ! Data(imgRGB.sum)
       context.become(
-        waitingForData(
-          currentWorkerId + 1,
+        waitingForImage(
+          currentMasterId + 1,
           currentTaskId + 1,
-          workers,
+          masters,
           taskIdSet + currentTaskId,
           result
         )
       )
-    case Result(id, luminance) =>
+    case Aggregate(id, name, luminance) =>
       val newTaskIdSet = taskIdSet - id
-      val newResult = Luminance(result.score + luminance.score)
-      if (newTaskIdSet.isEmpty) context.parent ! Aggregate(newResult)
+      val newResult = result + (name -> Luminance(
+        luminance.score + result.getOrElse(name, Luminance(0)).score
+      ))
+      val processedResult = newResult.map(result => {
+        if (result._2.score >= cutOff) (result._1, Light)
+        else (result._1, Dark)
+      })
+      if (newTaskIdSet.isEmpty) context.parent ! processedResult
       else
         context.become(
-          waitingForData(
-            currentWorkerId,
+          waitingForImage(
+            currentMasterId,
             currentTaskId,
-            workers,
+            masters,
             newTaskIdSet,
             newResult
           )
