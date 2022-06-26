@@ -1,80 +1,86 @@
 package actors
 
 import actors.Ingestion.Image
-import actors.Master.Aggregate
-import actors.ParentMaster.{Dark, Data, Light}
-import actors.Worker.Luminance
+import actors.Master.{Aggregate, Dark, Bright, LuminanceLabel}
+import actors.Worker.{Execute, Luminance, Result}
 import akka.actor.{Actor, ActorRef, Props}
 
 object Master {
   case object InitializeMaster
   case object WorkerInitialized
   case class FinalResult(luminance: Luminance)
-  case class Data(sumOfColor: Int)
+  case class Data(name: String, sumOfColor: Int)
+  case class Aggregate(result: List[(String, LuminanceLabel, Int)])
 
-  trait LuminanceLabel
-  case object Dark extends LuminanceLabel
-  case object Light extends LuminanceLabel
+  trait LuminanceLabel {
+    def value: String
+  }
+  case object Dark extends LuminanceLabel {
+    override def value: String = "dark"
+  }
+  case object Bright extends LuminanceLabel {
+    override def value: String = "bright"
+  }
 
-  def props(amountOfWorkers: Int, cutOff: Int): Props = Props(
-    new Master(amountOfWorkers, cutOff)
-  )
+  def props(amountOfWorkers: Int, cutOff: Int, numberOfTasks: Int): Props =
+    Props(
+      new Master(amountOfWorkers, cutOff, numberOfTasks)
+    )
 }
 
-class Master(amountOfMasters: Int, cutOff: Int) extends Actor {
-  val masters: Vector[ActorRef] =
-    (0 until amountOfMasters).toVector.map(id =>
-      context.actorOf(Props[Master], s"$id-master")
+class Master(amountOfWorkers: Int, cutOff: Int, numberOfTasks: Int)
+    extends Actor {
+  val workers: Vector[ActorRef] =
+    (0 until amountOfWorkers).toVector.map(id =>
+      context.actorOf(Props[Worker], s"$id-worker")
     )
 
   override def receive: Receive =
     waitingForImage(
       0,
-      0,
-      masters,
-      Set.empty[Int],
-      Map.empty[String, Luminance]
+      workers,
+      numberOfTasks,
+      List.empty[(String, Luminance)]
     )
 
   def waitingForImage(
-      currentMasterId: Int,
-      currentTaskId: Int,
-      masters: Vector[ActorRef],
-      taskIdSet: Set[Int],
-      result: Map[String, Luminance]
+      currentWorkerId: Int,
+      workers: Vector[ActorRef],
+      remainingTasks: Int,
+      result: List[(String, Luminance)]
   ): Receive = {
     case Image(name, img) =>
-      val currentMaster = masters(currentMasterId)
-      val w = img.getWidth()
-      val h = img.getHeight()
-      val imgRGB = img.getRGB(0, 0, w, h, null, 0, w)
-      currentMaster ! Data(imgRGB.sum)
+      val currentWorker = workers(currentWorkerId)
+      currentWorker ! Execute(
+        name,
+        img
+      )
       context.become(
         waitingForImage(
-          currentMasterId + 1,
-          currentTaskId + 1,
-          masters,
-          taskIdSet + currentTaskId,
+          currentWorkerId + 1 % amountOfWorkers,
+          workers,
+          remainingTasks,
           result
         )
       )
-    case Aggregate(id, name, luminance) =>
-      val newTaskIdSet = taskIdSet - id
-      val newResult = result + (name -> Luminance(
-        luminance.score + result.getOrElse(name, Luminance(0)).score
-      ))
-      val processedResult = newResult.map(result => {
-        if (result._2.score >= cutOff) (result._1, Light)
-        else (result._1, Dark)
-      })
-      if (newTaskIdSet.isEmpty) context.parent ! processedResult
-      else
+    case Result(name, luminance) =>
+      val newRemainingTasks = remainingTasks - 1
+      val newResult = result :+ (name, luminance)
+      if (newRemainingTasks == 0) {
+        val processedResult = newResult.foldLeft(
+          List.empty[(String, LuminanceLabel, Int)]
+        )((acc, res) => {
+          if (res._2.score >= cutOff)
+            acc :+ (res._1, Bright, res._2.score)
+          else acc :+ (res._1, Dark, res._2.score)
+        })
+        context.parent ! Aggregate(processedResult)
+      } else
         context.become(
           waitingForImage(
-            currentMasterId,
-            currentTaskId,
-            masters,
-            newTaskIdSet,
+            currentWorkerId,
+            workers,
+            newRemainingTasks,
             newResult
           )
         )
