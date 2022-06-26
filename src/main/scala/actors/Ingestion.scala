@@ -49,3 +49,31 @@ trait IngestionHandler {
     )
   }
 }
+
+class Ingestion(
+    inDir: String,
+    outDir: String,
+    cutOff: Int,
+    amountOfWorkers: Int
+) extends Actor
+    with IngestionHandler {
+
+  val listOfImages: List[File] = getListOfImages(inDir)
+  val masterNode: ActorRef =
+    context.actorOf(
+      Master.props(amountOfWorkers, cutOff, listOfImages.length),
+      "masterNode"
+    )
+
+  override def receive: Receive = {
+    case StartIngestion =>
+      listOfImages.foreach(file =>
+        masterNode ! Image(file.getName, ImageIO.read(file))
+      )
+    case Aggregate(list) =>
+      list.foreach(result =>
+        writeNewFile(result._1, result._2, result._3, inDir, outDir)
+      )
+      context.parent ! Stop
+  }
+}
