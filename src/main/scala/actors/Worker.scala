@@ -20,7 +20,7 @@ trait WorkerHandler {
     img.getRGB(0, 0, w, h, null, 0, w)
   }
   def calculateLuminance(image: Array[Int]): Luminance = {
-    val sumOfRGB = image.foldLeft((0, 0, 0))((acc, pixel) => {
+    val sumOfRGB = image.foldLeft((0L, 0L, 0L))((acc, pixel) => {
       val c = new Color(pixel)
       (
         acc._1 + c.getRed,
@@ -34,7 +34,7 @@ trait WorkerHandler {
     Luminance(
       (sqrt(
         0.299 * (R * R) + 0.587 * (G * G) + 0.114 * (B * B)
-      ) * 100).toInt
+      ) * 100).round.toInt
     )
   }
 }
