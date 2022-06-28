@@ -6,8 +6,7 @@ import io.circe.parser.parse
 object ConfigReader {
   @JsonCodec case class Config(
       inputDirectory: String,
-      outputDirectory: String,
-      cutOff: Int
+      outputDirectory: String
   )
 
   def readConfig: Option[Config] = {
