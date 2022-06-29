@@ -3,9 +3,9 @@ Simple image classifier, that decides whether an image is light or dark.
 
 ## Technologies
 Project is created with:
-* scala version: 2.13.8
-* akka library version: 2.6.14
-* circe library version: 0.14.1
+- scala version: 2.13.8
+- akka library version: 2.6.14
+- circe library version: 0.14.1
 
 ## Setup
 To run this project, go to current project directory and run using:
