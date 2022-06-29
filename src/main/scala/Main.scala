@@ -7,7 +7,7 @@ object Main extends App {
   val system = ActorSystem("ImageProcessing")
   val conf = readConfig
   val numberOfWorkers = 100
-  val cutOffPoint = 30
+  val cutOffPoint = 25
   conf match {
     case Some(Config(inDir, outDir)) =>
       val supervisor =

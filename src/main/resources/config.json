@@ -1,4 +1,4 @@
 {
-  "inputDirectory": "/home/kacper/Desktop/in",
-  "outputDirectory": "/home/kacper/Desktop/out"
+  "inputDirectory": "./src/main/resources/in",
+  "outputDirectory": "./src/main/resources/out"
 }
